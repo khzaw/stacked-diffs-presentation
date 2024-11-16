@@ -1,0 +1,107 @@
+* Stacked Diffs
+** Why Stacked Diffs?
++ Code review takes a long time both author and reviewers.
++ As the author, you can be stuck waiting for hours/days.
+** What are Stacked Diffs?
++ A workflow concept that invovles stacking a series of small, dependent changes on top of one another.
++ Allows code reviews to happen on each small change, making them more efficient and managable.
+** Stacking manually is extremely painful
++ Stacked branches are dependent on each other.
++ Anytime there is an upstream change,
+  + Every branch in the rest of the stack needs to be recursively rebased on top of one another to stay in sync again.
+  + Child branches from D+2 onwards can be stuck in limbo with if D+1 is merged with =git merge --squash= to =trunk=.
++ Potential of cascading merge conflicts.
++ Can get real messy
+  + If you are not crystal clear on what's happening. (With/without tooling)
+** True =merge=
+#+begin_src
+
+#+end_src
+
+** Rebase
+
+*** ~git rebase~
+**** Start a =feature= branch from =master=
+#+caption: Start a feature branch from master
+#+begin_src mermaid :file img/rebase-feature-branch-from-master.png :exports both
+%%{init: {
+    'gitGraph': {
+        'mainBranchName': 'master'
+    },
+    'titleTopMargin': 25
+}}%%
+---
+tilte: Feature branch from master
+---
+gitGraph
+commit id: "A"
+commit id: "B"
+commit id: "C"
+branch feature
+commit id: "D"
+commit id: "E"
+#+end_src
+
+#+RESULTS:
+[[file:img/rebase-feature-branch-from-master.png]]
+
+**** =master= has updates
+#+begin_src mermaid :file img/rebase-feature-branch-master-has-updates.png :exports both
+%%{init: {
+    'gitGraph': {
+        'showBranches': true,
+        'showCommitLabel': true,
+        'mainBranchName': 'master'
+    },
+    'titleTopMargin': 25
+}}%%
+---
+tilte: Feature branch from master
+---
+gitGraph LR:
+    commit id: "A"
+    commit id: "B"
+    commit id: "C"
+    branch feature
+    commit id: "D"
+    commit id: "E"
+    checkout master
+    commit id: "F"
+    commit id: "G"
+#+end_src
+
+#+RESULTS:
+[[file:img/rebase-feature-branch-master-has-updates.png]]
+
+**** =rebase= feature onto =master=
+
+#+begin_src zsh
+git rebase maser
+#+end_src
+
+#+caption: Rebase feature onto master
+#+begin_src mermaid :file img/rebase-feature-onto-master.png :exports both
+%%{init: {
+    'gitGraph': {
+        'showBranches': true,
+        'showCommitLabel': true,
+        'mainBranchName': 'master'
+    },
+    'titleTopMargin': 25
+}}%%
+---
+tilte: Feature branch from master
+---
+gitGraph LR:
+commit id: "A"
+commit id: "B"
+commit id: "C"
+commit id: "F"
+commit id: "G"
+branch feature
+commit id: "D"
+commit id: "E" type: HIGHLIGHT
+#+end_src
+
+#+RESULTS:
+[[file:img/rebase-feature-onto-master.png]]
