@@ -1,11 +1,21 @@
 * Stacked Diffs
-** Why Stacked Diffs?
++ Today I am going to talk about stacked diffs.
++ You might have also heard it as stacked branches/stacked PRs workflows.
++ This talk is more focused on =How?= rather than =Why?=
+
+* History of Stacked Diffs
++ Google
++ Facebook with *Phabricator*.
+
+* Why Stacked Diffs?
 + Code review takes a long time both author and reviewers.
 + As the author, you can be stuck waiting for hours/days.
-** What are Stacked Diffs?
+
+* What are Stacked Diffs?
 + A workflow concept that invovles stacking a series of small, dependent changes on top of one another.
 + Allows code reviews to happen on each small change, making them more efficient and managable.
-** Stacking manually is extremely painful
+
+* Stacking manually is extremely painful
 + Stacked branches are dependent on each other.
 + Anytime there is an upstream change,
   + Every branch in the rest of the stack needs to be recursively rebased on top of one another to stay in sync again.
@@ -13,15 +23,39 @@
 + Potential of cascading merge conflicts.
 + Can get real messy
   + If you are not crystal clear on what's happening. (With/without tooling)
-** True =merge=
-#+begin_src
 
+* True =merge= vs =squash merge= vs =rebase merge=
++ A true =merge= brings in no changes but connects the two or more histories with a parent pointer to each.
+  + *Preserves* the complete branch history and shows the relationship between branches.
++ =Squash merge= *combines* all feature commits into a single commit on the base branch, loses branch relationships.
++ =Rebase merge= replays commits for linear history, no merge commit, new hashes.
+#+begin_src
+Starting state:
+main        A---B---C
+                \
+feature         D---E---F
+
+
+Regular Merge:   A---B---C---------M
+                     \           /
+                      D---E---F
+
+Squash Merge:    A---B---C---S
+                     \
+                      D---E---F
+
+Rebase Merge:    A---B---C---D'---E'---F'
 #+end_src
 
-** Rebase
+* Problem with =squash merge=
 
-*** ~git rebase~
-**** Start a =feature= branch from =master=
+
+* Rebase
++ =Rebasing= is a core part of stacked branches.
++ *3 Principles* to follow generally.
+  + Keep branches small
+  + =Rebase= on top of _trunk_.
+** Start a =feature= branch from =master=
 #+caption: Start a feature branch from master
 #+begin_src mermaid :file img/rebase-feature-branch-from-master.png :exports both
 %%{init: {
@@ -41,10 +75,7 @@ branch feature
 commit id: "D"
 commit id: "E"
 #+end_src
-
-#+RESULTS:
 [[file:img/rebase-feature-branch-from-master.png]]
-
 **** =master= has updates
 #+begin_src mermaid :file img/rebase-feature-branch-master-has-updates.png :exports both
 %%{init: {
