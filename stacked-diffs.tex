@@ -1,0 +1,391 @@
+% Created 2024-11-22 Fri 09:22
+% Intended LaTeX compiler: pdflatex
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{wrapfig}
+\usepackage{rotating}
+\usepackage[normalem]{ulem}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{capt-of}
+\usepackage{hyperref}
+\makeatletter
+\newcommand{\citeprocitem}[2]{\hyper@linkstart{cite}{citeproc_bib_item_#1}#2\hyper@linkend}
+\makeatother
+\author{Kaung Htet}
+\date{\today}
+\title{How to Manage Stacked Diffs with Git}
+\hypersetup{
+ pdfauthor={Kaung Htet},
+ pdftitle={How to Manage Stacked Diffs with Git},
+ pdfkeywords={},
+ pdfsubject={},
+ pdfcreator={Emacs 31.0.50 (Org mode 9.7.11)}, 
+ pdflang={English}}
+\begin{document}
+
+\maketitle
+\tableofcontents
+
+\section{Stacked Diffs}
+\label{sec:org6984f5a}
+\begin{itemize}
+\item Today I am going to talk about stacked diffs.
+\item You might have also heard it as stacked diffs/stacked branches/stacked PRs workflows.
+\item This talk is more focused on \texttt{How to manage staked diffs/branches?} rather than \texttt{Why?}
+\begin{itemize}
+\item Most resources online don't really talk about \texttt{how} and point to \texttt{Phabricator}, \texttt{Graphite}., etc
+\end{itemize}
+\item Talk is also tailored more to our repositories.
+\end{itemize}
+\section{My Background}
+\label{sec:orgeb85d27}
+\begin{itemize}
+\item Started out with \texttt{svn} (very brief)
+\item Mercurial \texttt{(hg)},
+\item Git \texttt{(git)}
+\end{itemize}
+\section{What are Stacked Diffs?}
+\label{sec:org5a9d651}
+\begin{itemize}
+\item A workflow concept that invovles stacking \texttt{a series of small, atomic and dependent changes} on top of one another.
+\item Allows code reviews to happen on each small change, making them more efficient and managable.
+\item Every \textbf{"commit" (diff)} becomes a code review.
+\begin{itemize}
+\item That's the Phabricator approach.
+\item Trying to do that without tooling in our context is unintuitive and impractical.
+\item The essense to have work on top of local \texttt{master} and the tool will create a new remote branch for each commit and a respective new code review ("PR" in our speak) for each commit against \texttt{master}.
+\end{itemize}
+\begin{verbatim}
+master (local):    A---B---C---D---E---F
+                           \
+                       (origin/master)
+
+- D, E, F becomes individual branches
+- D is PR against C
+- E is PR against C
+- F is PR against C
+
+In your only using Github UI,
+- in E PR view, you see everything from D+E.
+- in F PR view, you see everything from D+E+F.
+
+Landing PRs.
+The merge happens for (C)
+Tooling sync back to your local branch and rebase against origin-master
+master (local):    A---B---C---D---E---F
+                                \
+                             (origin/master)
+
+\end{verbatim}
+\end{itemize}
+\section{Branches in \texttt{Git}}
+\label{sec:org247ce01}
+\begin{itemize}
+\item There is no such thing as "branches"
+\item Branches are named references to commits.
+\begin{itemize}
+\item Essentially 41-byte referecne pointing to a commit hash.
+\item Exteremely cheap operation compared to other VCS.
+\end{itemize}
+\end{itemize}
+\subsubsection{Compared to other D-VCS?}
+\label{sec:org534f7c4}
+\begin{itemize}
+\item Git branches are still very flexible since it treats them \textbf{purely as movable pointers to commits}.
+\item e.g., \textbf{Mercurial} branches are permanent markers in commit history.
+\end{itemize}
+
+\begin{center}
+\includegraphics[width=.9\linewidth]{./img/pablo-refs.png}
+\end{center}
+\section{Stacking branches prone to be extremely painful}
+\label{sec:orgf7eb519}
+\begin{itemize}
+\item In theory, stacked diffs seem like a pleasant workflow.
+\item Stacked branches are dependent on each other.
+\item Anytime there is an upstream change,
+\begin{itemize}
+\item Every branch in the rest of the stack needs to be recursively rebased on top of one another to stay in sync again.
+\item Child branches from D+2 onwards can be stuck in limbo with if D+1 is merged with \texttt{git merge -{}-{}squash} to \texttt{trunk}.
+\end{itemize}
+\item Potential of cascading merge conflicts.
+\item Can get real messy
+\begin{itemize}
+\item If you are not crystal clear on what's happening. (With/without tooling).
+\end{itemize}
+\item This talk will suggest workflows/tooling.
+\begin{itemize}
+\item Without being clear on what's happening underneath, you are prone to a lot of nested mess.
+\end{itemize}
+\end{itemize}
+\section{True \texttt{merge} vs \texttt{squash merge} vs \texttt{rebase merge}}
+\label{sec:org5776794}
+\begin{itemize}
+\item A true \texttt{merge} brings in no changes but connects the two or more histories with a parent pointer to each.
+\begin{itemize}
+\item \textbf{Preserves} the complete branch history and shows the relationship between branches.
+\end{itemize}
+\item \texttt{Squash merge} \textbf{combines} all feature commits into a single commit on the base branch, loses branch relationships.
+\item \texttt{Rebase merge} replays commits for linear history, no merge commit, new hashes.
+\end{itemize}
+\begin{verbatim}
+Starting state:
+main        A---B---C
+                \
+feature         D---E---F
+
+
+Regular Merge:   A---B---C---------M
+                     \           /
+                      D---E---F
+
+Squash Merge:    A---B---C---S
+                     \
+                      D---E---F
+
+Rebase Merge:    A---B---C---D'---E'---F'
+\end{verbatim}
+\section{Problem with \texttt{squash merge}}
+\label{sec:orge85476f}
+\begin{itemize}
+\item \texttt{squash} merges are not true merges.
+\item It's simply one independent commit added to the target branch containing all the changes \emph{copied} from the resulting diff of the source + target branches.
+\item Without any reference to the source branch, literally except for comments in the commit message.
+\item Really against squash merges to trunk.
+\item Personally a little iffy about this choice, but it makes sense for us given how we use PRs and branches.
+\begin{itemize}
+\item At the end of the day the goal of \texttt{master} to have atomic changset in each commit that lands on it.
+\end{itemize}
+\end{itemize}
+\section{Rebase}
+\label{sec:org7b5fd74}
+\begin{itemize}
+\item \texttt{Rebasing} is a core part of maintaing stacked branches.
+\item \textbf{3 Principles} to follow generally.
+\begin{itemize}
+\item Keep branches small
+\item \texttt{Rebase} on top of \uline{trunk} to keep it up to date.
+\item You want each branch to always be on top of each other \texttt{in a linear manner}.
+\end{itemize}
+\end{itemize}
+\subsubsection{Start a \texttt{feature} branch from \texttt{master}}
+\label{sec:org4422e5a}
+\begin{center}
+\includegraphics[width=.9\linewidth]{img/rebase-feature-branch-from-master.png}
+\label{org801a71e}
+\end{center}
+\subsubsection{\texttt{master} has updates}
+\label{sec:org04c3cdc}
+\begin{center}
+\includegraphics[width=.9\linewidth]{img/rebase-feature-branch-master-has-updates.png}
+\label{org03a6a70}
+\end{center}
+\subsubsection{\texttt{rebase} feature onto \texttt{master}}
+\label{sec:orgd0bf04c}
+\begin{verbatim}
+git fetch origin master:master # pull down changes
+git rebase master
+\end{verbatim}
+
+\begin{center}
+\includegraphics[width=.9\linewidth]{img/rebase-feature-onto-master.png}
+\label{org7d48271}
+\end{center}
+\section{Making stacked branches}
+\label{sec:org2f57e96}
+\subsubsection{Create stacked branches}
+\label{sec:org2e6c077}
+\begin{center}
+\includegraphics[width=.9\linewidth]{img/create-stacked-branches.png}
+\label{orgc2226b4}
+\end{center}
+\subsubsection{Keep your changset small}
+\label{sec:org1bd7772}
+\begin{itemize}
+\item Say you keep working on \texttt{feature1}
+\end{itemize}
+\begin{verbatim}
+git checkout feature1
+# ... more work here
+git commit -am 'Debug'
+# ... more work here
+git commit -am 'Fix typo'
+git revert HEAD^
+\end{verbatim}
+
+\begin{center}
+\includegraphics[width=.9\linewidth]{img/feature-1-has-updates.png}
+\label{org25d07ff}
+\end{center}
+
+\begin{itemize}
+\item \texttt{rebase} feature1
+\end{itemize}
+\begin{verbatim}
+git rebase -i # DEMO?
+\end{verbatim}
+\begin{center}
+\includegraphics[width=.9\linewidth]{img/rebase-feature-1.png}
+\label{org6221114}
+\end{center}
+
+\begin{itemize}
+\item In fact keep it as lean and atomic as possible
+\begin{itemize}
+\item Not necessarily mean literally one commit
+\end{itemize}
+\end{itemize}
+
+\begin{center}
+\includegraphics[width=.9\linewidth]{img/rebase-feature-1-clean.png}
+\label{org52dde7f}
+\end{center}
+\section{\texttt{Rebase} child branches one by one}
+\label{sec:org9f3a1f5}
+\begin{verbatim}
+git checkout feature2
+git rebase feature1
+\end{verbatim}
+\begin{center}
+\includegraphics[width=.9\linewidth]{img/rebase-feature2-onto-feature1.png}
+\label{org7fafbcd}
+\end{center}
+
+\begin{verbatim}
+git checkout feature3
+git rebase feature2
+\end{verbatim}
+\begin{center}
+\includegraphics[width=.9\linewidth]{img/rebase-child-branches-final-state.png}
+\label{orge572f6b}
+\end{center}
+\section{Can we do it in one go?}
+\label{sec:org4990027}
+\begin{itemize}
+\item Yes, enter \texttt{git rebase -{}-{}onto} for surgically more precise rebasing.
+\end{itemize}
+
+\begin{verbatim}
+git rebase --onto <newparent> <old parent> HEAD
+git rebase --onto <newparent> <old parent> <until>
+\end{verbatim}
+\subsubsection{Rewind the state after \texttt{rebasing} feature1}
+\label{sec:orga545ba4}
+\begin{center}
+\includegraphics[width=.9\linewidth]{img/rebase-feature-1-clean-with-head.png}
+\label{orgfb09df7}
+\end{center}
+\subsubsection{Go to the innermost child branch at the end of the stack.}
+\label{sec:orgd2fe6a2}
+\begin{verbatim}
+git checkout feature4
+git rebase --onto feature1 feature2^ feature4 --update-refs
+\end{verbatim}
+\begin{center}
+\includegraphics[width=.9\linewidth]{img/stacked-branches-final-state.png}
+\label{org48649c2}
+\end{center}
+\section{Merging \texttt{feature1} to \texttt{master}.}
+\label{sec:orga2a1415}
+\subsubsection{feature1 has been reviewed and finally merged to \texttt{master}.}
+\label{sec:org5b18b8f}
+\begin{verbatim}
+git checkout master
+git merge --squash feature1
+# At github remote, it auto delete the remote branch (origin/feature1) -- Our settings
+\end{verbatim}
+
+\begin{center}
+\includegraphics[width=.9\linewidth]{img/feature-1-post-squash-merge-to-master.png}
+\label{orgd916233}
+\end{center}
+\subsubsection{Now what?}
+\label{sec:orgda474e6}
+\begin{itemize}
+\item Your local feature1 branch still exits.
+\item After pulling, Git does not even know that it was merged to master
+\item When you delete, you have to use \texttt{-D} instead of \texttt{-d}.
+\item Anyway, let's continue the rebase.
+\end{itemize}
+\begin{verbatim}
+git branch -D feature1
+git checkout feature3
+git rebase --onto origin/master feature2^ feature3 --update-refs
+
+# still need to update the remote refs
+git push --force-with-lease origin feature3:feature3
+git push --force-with-lease origin feature2:feature2
+\end{verbatim}
+
+\begin{center}
+\includegraphics[width=.9\linewidth]{stack-branches-final-state-update-refs.png}
+\label{org95d0a76}
+\end{center}
+\section{What exactly is \texttt{-{}-{}update-refs} ?}
+\label{sec:orgabe3f09}
+
+\subsubsection{Go back to post squash merge state}
+\label{sec:org28a6f85}
+\begin{center}
+\includegraphics[width=.9\linewidth]{post-squash-merge-feature-1.png}
+\label{orgf5ca200}
+\end{center}
+\subsubsection{Without \texttt{-{}-{}update-refs}}
+\label{sec:org3ab16ce}
+\begin{itemize}
+\item What you wanted still happens, old branch references still remain
+\end{itemize}
+\begin{verbatim}
+git checkout feature3
+git rebase --onto origin/master feature2^ feature3 --udpate-refs
+git reset --hard origin/feature3
+
+\end{verbatim}
+
+\begin{center}
+\includegraphics[width=.9\linewidth]{rebase-child-branches-without-stacked-refs.png}
+\label{orgc2b4497}
+\end{center}
+\section{To sum up}
+\label{sec:org7e16779}
+
+\begin{itemize}
+\item Keep changset small in a branch. Always clean it up. (\texttt{git rebase -i})
+\item If a branch is merged, use \texttt{git rebase -{}-{}onto} with \texttt{-{}-{}update-refs} from the innermost branch
+\end{itemize}
+
+\begin{verbatim}
+
+# after every merge, go to innermost branch
+git rebase --onto <newparent> <oldparent> <until> --update-refs
+
+
+# update the remote refs
+for all branches from branch+1 to innermost branch
+  git push -f origin <ref>
+endfor
+\end{verbatim}
+\subsubsection{Can I automate this part.}
+\label{sec:orgc9e9501}
+\begin{itemize}
+\item Yes, check out \href{https://www.git-town.com/}{Git Town}.
+\end{itemize}
+\begin{verbatim}
+git town hack <my-feature>
+# work on stuffs and create commits
+git town append <branch2>
+git town append <branch3>
+git town append <branch4>
+git town append <branch5>
+
+# Ship branch2 for example
+git town ship branch2
+
+# And then from your youngest branch
+git town sync
+\end{verbatim}
+\end{document}
